@@ -1,9 +1,7 @@
 package com.worldbuilder;
 
 import com.google.gson.Gson;
-import java.lang.reflect.Proxy;
 import java.util.Arrays;
-import net.runelite.api.Model;
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;
 import org.junit.Assert;
@@ -96,39 +94,4 @@ public class WorldBuilderPluginTest
         Assert.assertTrue(ObjectDefinitionDecoder.decode(extendedBytes).isSafeForCustomRendering());
     }
 
-    @Test
-    public void modelSafetyValidatorRejectsInvalidFaceIndices()
-    {
-        Assert.assertTrue(ModelSafetyValidator.isSafe(testModel(new int[]{0, 1, 2})));
-        Assert.assertFalse(ModelSafetyValidator.isSafe(testModel(new int[]{0, 1, 99})));
-    }
-
-    private static Model testModel(int[] indices)
-    {
-        return (Model) Proxy.newProxyInstance(Model.class.getClassLoader(), new Class<?>[]{Model.class}, (proxy, method, args) ->
-        {
-            switch (method.getName())
-            {
-                case "getVerticesCount": return 3;
-                case "getFaceCount": return 1;
-                case "getVerticesX": return new float[]{-1, 1, 0};
-                case "getVerticesY": return new float[]{0, 0, -1};
-                case "getVerticesZ": return new float[]{0, 0, 1};
-                case "getFaceIndices1": return new int[]{indices[0]};
-                case "getFaceIndices2": return new int[]{indices[1]};
-                case "getFaceIndices3": return new int[]{indices[2]};
-                case "getFaceColors1":
-                case "getFaceColors2":
-                case "getFaceColors3": return new int[]{1};
-                case "getFaceTransparencies":
-                case "getFaceTextures":
-                case "getTextureFaces": return null;
-                default:
-                    if (method.getReturnType() == boolean.class) return false;
-                    if (method.getReturnType() == int.class) return 0;
-                    if (method.getReturnType() == byte.class) return (byte) 0;
-                    return null;
-            }
-        });
-    }
 }

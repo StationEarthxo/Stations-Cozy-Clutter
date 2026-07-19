@@ -16,7 +16,6 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
 import java.awt.image.BufferedImage;
-import java.lang.reflect.Type;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -98,8 +97,8 @@ public class WorldBuilderPlugin extends Plugin
     // These objects were incorrectly persisted as blocked by v0.2.0 when the
     // config cache was unavailable during the first LOGGED_IN callback.
     private static final Set<Integer> FALSE_BLOCKS_V020 = new HashSet<>(Arrays.asList(1, 1187, 15872, 42827));
-    private static final Type PLACEMENT_LIST_TYPE = new TypeToken<List<PropPlacement>>() { }.getType();
-    private static final Type INTEGER_SET_TYPE = new TypeToken<Set<Integer>>() { }.getType();
+    private static final TypeToken<List<PropPlacement>> PLACEMENT_LIST_TYPE = new TypeToken<List<PropPlacement>>() { };
+    private static final TypeToken<Set<Integer>> INTEGER_SET_TYPE = new TypeToken<Set<Integer>>() { };
     private static final Logger log = LoggerFactory.getLogger(WorldBuilderPlugin.class);
 
     @Inject
@@ -992,7 +991,7 @@ public class WorldBuilderPlugin extends Plugin
         }
         try
         {
-            Set<Integer> values = gson.fromJson(json, INTEGER_SET_TYPE);
+            Set<Integer> values = gson.fromJson(json, INTEGER_SET_TYPE.getType());
             if (values != null)
             {
                 destination.addAll(values);
@@ -1019,7 +1018,7 @@ public class WorldBuilderPlugin extends Plugin
         }
         try
         {
-            List<PropPlacement> saved = gson.fromJson(json, PLACEMENT_LIST_TYPE);
+            List<PropPlacement> saved = gson.fromJson(json, PLACEMENT_LIST_TYPE.getType());
             if (saved != null)
             {
                 saved.stream()
