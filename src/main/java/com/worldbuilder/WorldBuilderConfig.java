@@ -13,7 +13,7 @@ public interface WorldBuilderConfig extends Config
     @ConfigItem(
         keyName = "requireShift",
         name = "Require Shift",
-        description = "Only show World Builder options while Shift is held"
+        description = "Only show Station's Cozy Clutter options while Shift is held"
     )
     default boolean requireShift()
     {

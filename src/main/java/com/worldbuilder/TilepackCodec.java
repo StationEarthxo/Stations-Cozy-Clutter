@@ -33,7 +33,7 @@ final class TilepackCodec
     {
         if (code == null || !code.trim().startsWith(PREFIX))
         {
-            throw new IllegalArgumentException("Not a World Builder Tilepack code");
+            throw new IllegalArgumentException("Not a Station's Cozy Clutter Tilepack code");
         }
 
         byte[] compressed;

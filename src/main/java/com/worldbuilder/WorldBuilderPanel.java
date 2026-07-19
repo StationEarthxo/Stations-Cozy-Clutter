@@ -60,7 +60,7 @@ final class WorldBuilderPanel extends PluginPanel
 
         JPanel header = new JPanel(new BorderLayout(0, 5));
         header.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        JLabel title = new JLabel("WORLD BUILDER", SwingConstants.CENTER);
+        JLabel title = new JLabel("STATION'S COZY CLUTTER", SwingConstants.CENTER);
         title.setForeground(Color.WHITE);
         header.add(title, BorderLayout.NORTH);
         search.setToolTipText("Search by object name or ID");

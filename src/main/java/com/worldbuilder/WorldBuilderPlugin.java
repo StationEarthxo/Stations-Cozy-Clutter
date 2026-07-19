@@ -79,7 +79,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @PluginDescriptor(
-    name = "World Builder",
+    name = "Station's Cozy Clutter",
     description = "Build with client-side game scenery and share it as Tilepacks",
     tags = {"world", "builder", "objects", "housing", "tilepack"},
     enabledByDefault = false
@@ -259,7 +259,7 @@ public class WorldBuilderPlugin extends Plugin
     {
         panel = new WorldBuilderPanel(this);
         navigationButton = NavigationButton.builder()
-            .tooltip("World Builder")
+            .tooltip("Station's Cozy Clutter")
             .icon(createNavigationIcon())
             .priority(7)
             .panel(panel)
@@ -695,7 +695,7 @@ public class WorldBuilderPlugin extends Plugin
         }
 
         client.createMenuEntry(-1)
-            .setOption("Copy to World Builder")
+            .setOption("Copy to Station's Cozy Clutter")
             .setTarget(original.getTarget())
             .setType(MenuAction.RUNELITE)
             .onClick(entry -> copyObject(object));
@@ -712,7 +712,7 @@ public class WorldBuilderPlugin extends Plugin
         PropPlacement selected = findLastAt(point);
 
         MenuEntry parent = client.createMenuEntry(-1)
-            .setOption("World Builder")
+            .setOption("Station's Cozy Clutter")
             .setTarget("Tile")
             .setType(MenuAction.RUNELITE);
         Menu menu = parent.createSubMenu();
@@ -728,7 +728,7 @@ public class WorldBuilderPlugin extends Plugin
         if (selected != null)
         {
             // RuneLite's in-game menu supports one submenu level. Creating an
-            // Edit submenu inside the World Builder submenu trips a native
+            // Edit submenu inside the Station's Cozy Clutter submenu trips a native
             // client assertion as soon as the player hovers Edit. Keep every
             // edit action at this first, safe submenu level.
             menu.createMenuEntry(-1).setOption("Rotate placed object 45 degrees").setType(MenuAction.RUNELITE)
@@ -858,7 +858,7 @@ public class WorldBuilderPlugin extends Plugin
         placements.addAll(undo.pop());
         savePlacements();
         refreshAll();
-        message("Undid the last World Builder change.");
+        message("Undid the last Station's Cozy Clutter change.");
     }
 
     private void pushUndo()
@@ -999,7 +999,7 @@ public class WorldBuilderPlugin extends Plugin
         }
         catch (JsonSyntaxException ex)
         {
-            log.debug("Ignoring invalid World Builder safety state", ex);
+            log.debug("Ignoring invalid Station's Cozy Clutter safety state", ex);
         }
     }
 
@@ -1035,7 +1035,7 @@ public class WorldBuilderPlugin extends Plugin
         }
         catch (JsonSyntaxException ex)
         {
-            log.warn("Unable to load World Builder props", ex);
+            log.warn("Unable to load Station's Cozy Clutter props", ex);
         }
     }
 
@@ -1360,11 +1360,11 @@ public class WorldBuilderPlugin extends Plugin
         // chat subscribers assume it is already non-null.
         if (client.getLocalPlayer() != null)
         {
-            client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "[World Builder] " + text, null);
+            client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "[Station's Cozy Clutter] " + text, null);
         }
         else
         {
-            log.debug("World Builder startup message: {}", text);
+            log.debug("Station's Cozy Clutter startup message: {}", text);
         }
     }
 
