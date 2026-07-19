@@ -1,4 +1,4 @@
-# Stations Cozy Clutter
+# Station's Cozy Clutter
 
 Legal: Stations Cozy Clutter is a local RuneLite plugin for placing game scenery as client-side props. Builds are cosmetic: they do not alter the game server, collision, or what players without the same Tilepack see.
 
