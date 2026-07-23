@@ -163,4 +163,15 @@ public class WorldBuilderPluginTest
         Assert.assertFalse(prop.isValid());
     }
 
+    @Test
+    public void placementModesUseExpectedSubTileSteps()
+    {
+        Assert.assertFalse(PlacementMode.TILE_CENTRE.followsCursor());
+        Assert.assertEquals(0, PlacementMode.TILE_CENTRE.getLocalStep());
+        Assert.assertTrue(PlacementMode.FINE_GRID.followsCursor());
+        Assert.assertEquals(16, PlacementMode.FINE_GRID.getLocalStep());
+        Assert.assertTrue(PlacementMode.PRECISE_GRID.followsCursor());
+        Assert.assertEquals(8, PlacementMode.PRECISE_GRID.getLocalStep());
+    }
+
 }

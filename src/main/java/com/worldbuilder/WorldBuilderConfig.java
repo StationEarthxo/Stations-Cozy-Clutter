@@ -20,6 +20,16 @@ public interface WorldBuilderConfig extends Config
         return true;
     }
 
+    @ConfigItem(
+        keyName = "placementMode",
+        name = "Placement mode",
+        description = "Choose tile-centred placement or a mouse-following sub-tile grid"
+    )
+    default PlacementMode placementMode()
+    {
+        return PlacementMode.FINE_GRID;
+    }
+
     @Range(min = 25, max = 2000)
     @ConfigItem(
         keyName = "maximumProps",

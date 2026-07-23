@@ -35,6 +35,7 @@ final class WorldBuilderPanel extends PluginPanel
     private final JTextField search = new JTextField();
     private final JComboBox<String> catalogueType = new JComboBox<>(
         new String[]{"All decorations", "Static objects", "Animated", "Animated objects", "Animated NPCs"});
+    private final JComboBox<PlacementMode> placementMode = new JComboBox<>(PlacementMode.values());
     private final JLabel status = new JLabel("Loading object catalogue…");
     private final JPanel results = new JPanel(new GridLayout(0, 2, 5, 5));
     private final JScrollPane resultsScroll = new JScrollPane(results);
@@ -70,6 +71,9 @@ final class WorldBuilderPanel extends PluginPanel
         JPanel searchArea = new JPanel(new GridLayout(0, 1, 0, 4));
         searchArea.setBackground(ColorScheme.DARK_GRAY_COLOR);
         searchArea.add(catalogueType);
+        placementMode.setSelectedItem(plugin.getPlacementMode());
+        placementMode.setToolTipText("Choose how the cursor ghost snaps within the selected tile");
+        searchArea.add(placementMode);
         searchArea.add(search);
         header.add(searchArea, BorderLayout.CENTER);
         status.setForeground(Color.LIGHT_GRAY);
@@ -104,6 +108,8 @@ final class WorldBuilderPanel extends PluginPanel
             @Override public void changedUpdate(DocumentEvent event) { searchTimer.restart(); }
         });
         catalogueType.addActionListener(event -> runSearch());
+        placementMode.addActionListener(event ->
+            plugin.setPlacementMode((PlacementMode) placementMode.getSelectedItem()));
     }
 
     void setCatalogueProgress(int loaded, int total)

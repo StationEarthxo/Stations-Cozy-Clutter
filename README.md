@@ -11,7 +11,8 @@ Builds are cosmetic: they do not alter the game server, collision, or what playe
 ## Features
 
 - Browse a searchable 3D catalogue of static objects, animated objects, and animated NPC decorations.
-- Place repeatedly from a live cursor preview and use the mouse wheel to rotate before placing.
+- Choose tile-centred, fine 1/8-tile, or precise 1/16-tile placement; in the fine modes, the live cursor preview follows your mouse within each tile.
+- Rotate the live placement preview with the mouse wheel before placing.
 - Resize, raise, lower, rotate, duplicate, or delete any placed decoration.
 - Nudge props in precise 1/16-tile steps for posters, shelves, counters, and other close-fitting layouts.
 - Move an existing decoration to a new tile without losing its animation, scale, height, rotation, or nudge.

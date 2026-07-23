@@ -81,7 +81,7 @@ import org.slf4j.LoggerFactory;
 
 @PluginDescriptor(
     name = "Station's Cozy Clutter",
-    description = "Place, animate, resize, nudge, and move client-side scenery, then share builds as Tilepacks",
+    description = "Place, animate, resize, and precisely position client-side scenery, then share builds as Tilepacks",
     tags = {"world", "builder", "objects", "npc", "animation", "housing", "tilepack"}
 )
 public class WorldBuilderPlugin extends Plugin
@@ -141,6 +141,9 @@ public class WorldBuilderPlugin extends Plugin
     private volatile RuneLiteObject placementPreview;
     private volatile WorldPoint placementPreviewPoint;
     private volatile LocalPoint placementPreviewLocalPoint;
+    private volatile LocalPoint placementPreviewTileLocalPoint;
+    private volatile int placementPreviewOffsetX;
+    private volatile int placementPreviewOffsetY;
     private boolean placementMousePressConsumed;
     private boolean placementMouseClickConsumed;
     private boolean placementPreviewOwnsSafetyProbe;
@@ -180,14 +183,17 @@ public class WorldBuilderPlugin extends Plugin
             }
             if (SwingUtilities.isLeftMouseButton(event) && placementPreviewPoint != null && placementPreview != null
                 && placementPreviewLocalPoint != null
-                && Perspective.getCanvasTilePoly(client, placementPreviewLocalPoint) != null
-                && Perspective.getCanvasTilePoly(client, placementPreviewLocalPoint).contains(event.getPoint()))
+                && placementPreviewTileLocalPoint != null
+                && Perspective.getCanvasTilePoly(client, placementPreviewTileLocalPoint) != null
+                && Perspective.getCanvasTilePoly(client, placementPreviewTileLocalPoint).contains(event.getPoint()))
             {
                 WorldPoint point = placementPreviewPoint;
+                int offsetX = placementPreviewOffsetX;
+                int offsetY = placementPreviewOffsetY;
                 event.consume();
                 placementMousePressConsumed = true;
                 placementMouseClickConsumed = true;
-                clientThread.invokeLater(() -> placeCopied(point));
+                clientThread.invokeLater(() -> placeCopied(point, offsetX, offsetY));
             }
             return event;
         }
@@ -401,7 +407,14 @@ public class WorldBuilderPlugin extends Plugin
 
     private void updatePlacementPreview(WorldView worldView, LocalPoint localPoint, WorldPoint point)
     {
-        if (placementPreview != null && point.equals(placementPreviewPoint))
+        PlacementTarget target = resolvePlacementTarget(worldView, localPoint);
+        if (target == null)
+        {
+            clearPlacementPreview();
+            return;
+        }
+        if (placementPreview != null && point.equals(placementPreviewPoint)
+            && target.renderPoint.equals(placementPreviewLocalPoint))
         {
             return;
         }
@@ -425,14 +438,11 @@ public class WorldBuilderPlugin extends Plugin
         }
 
         PropPlacement probe = copied.duplicateAt(point.getX(), point.getY(), point.getPlane());
-        LocalPoint renderPoint = localPoint.plus(copied.offsetX, copied.offsetY);
-        if (!renderPoint.isInScene())
-        {
-            return;
-        }
+        probe.offsetX = target.offsetX;
+        probe.offsetY = target.offsetY;
         RuneLiteObject preview = client.createRuneLiteObject();
         preview.setModel(model);
-        preview.setLocation(renderPoint, worldView.getPlane());
+        preview.setLocation(target.renderPoint, worldView.getPlane());
         preview.setOrientation(copied.rotation & 2047);
         preview.setZ(preview.getZ() - copied.height);
         preview.setRadius(Math.max(60, 60 * copied.scale / 128));
@@ -462,7 +472,57 @@ public class WorldBuilderPlugin extends Plugin
         }
         placementPreview = preview;
         placementPreviewPoint = point;
-        placementPreviewLocalPoint = renderPoint;
+        placementPreviewLocalPoint = target.renderPoint;
+        placementPreviewTileLocalPoint = localPoint;
+        placementPreviewOffsetX = target.offsetX;
+        placementPreviewOffsetY = target.offsetY;
+    }
+
+    private PlacementTarget resolvePlacementTarget(WorldView worldView, LocalPoint tileCentre)
+    {
+        PlacementMode mode = getPlacementMode();
+        if (!mode.followsCursor())
+        {
+            LocalPoint renderPoint = tileCentre.plus(copied.offsetX, copied.offsetY);
+            return renderPoint.isInScene()
+                ? new PlacementTarget(renderPoint, copied.offsetX, copied.offsetY) : null;
+        }
+
+        net.runelite.api.Point mouse = client.getMouseCanvasPosition();
+        if (mouse == null || mouse.getX() < 0 || mouse.getY() < 0)
+        {
+            return new PlacementTarget(tileCentre, 0, 0);
+        }
+
+        int step = mode.getLocalStep();
+        long bestDistance = Long.MAX_VALUE;
+        PlacementTarget best = null;
+        for (int offsetX = -MAX_NUDGE; offsetX <= MAX_NUDGE; offsetX += step)
+        {
+            for (int offsetY = -MAX_NUDGE; offsetY <= MAX_NUDGE; offsetY += step)
+            {
+                LocalPoint candidate = tileCentre.plus(offsetX, offsetY);
+                if (!candidate.isInScene())
+                {
+                    continue;
+                }
+                net.runelite.api.Point canvasPoint =
+                    Perspective.localToCanvas(client, candidate, worldView.getPlane());
+                if (canvasPoint == null)
+                {
+                    continue;
+                }
+                long dx = canvasPoint.getX() - mouse.getX();
+                long dy = canvasPoint.getY() - mouse.getY();
+                long distance = dx * dx + dy * dy;
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = new PlacementTarget(candidate, offsetX, offsetY);
+                }
+            }
+        }
+        return best;
     }
 
     private void rotatePlacementPreview(PropPlacement selected, int wheelRotation)
@@ -488,6 +548,9 @@ public class WorldBuilderPlugin extends Plugin
         }
         placementPreviewPoint = null;
         placementPreviewLocalPoint = null;
+        placementPreviewTileLocalPoint = null;
+        placementPreviewOffsetX = 0;
+        placementPreviewOffsetY = 0;
     }
 
     private void clearPlacementPreviewAndProbe()
@@ -818,7 +881,7 @@ public class WorldBuilderPlugin extends Plugin
             menu.createMenuEntry(-1)
                 .setOption("Place " + copied.name)
                 .setType(MenuAction.RUNELITE)
-                .onClick(entry -> placeCopied(point));
+                .onClick(entry -> placeCopied(point, copied.offsetX, copied.offsetY));
         }
 
         if (selected != null)
@@ -897,7 +960,7 @@ public class WorldBuilderPlugin extends Plugin
             "Copied " + template.name + ". Scroll to rotate, left-click to place; right-click or Escape cancels.");
     }
 
-    private void placeCopied(WorldPoint point)
+    private void placeCopied(WorldPoint point, int offsetX, int offsetY)
     {
         PropPlacement template = copied;
         if (template == null)
@@ -919,8 +982,8 @@ public class WorldBuilderPlugin extends Plugin
             selected.worldX = point.getX();
             selected.worldY = point.getY();
             selected.plane = point.getPlane();
-            selected.offsetX = template.offsetX;
-            selected.offsetY = template.offsetY;
+            selected.offsetX = offsetX;
+            selected.offsetY = offsetY;
             selected.rotation = template.rotation;
             savePlacements();
             respawn(selected);
@@ -942,6 +1005,8 @@ public class WorldBuilderPlugin extends Plugin
         }
         pushUndo();
         PropPlacement placement = template.duplicateAt(point.getX(), point.getY(), point.getPlane());
+        placement.offsetX = offsetX;
+        placement.offsetY = offsetY;
         placements.add(placement);
         savePlacements();
         if (placementPreviewOwnsSafetyProbe && activeSafetyProbe != null
@@ -981,6 +1046,22 @@ public class WorldBuilderPlugin extends Plugin
         movingPlacementId = null;
         copied = template;
         message(status);
+    }
+
+    PlacementMode getPlacementMode()
+    {
+        PlacementMode mode = config.placementMode();
+        return mode == null ? PlacementMode.FINE_GRID : mode;
+    }
+
+    void setPlacementMode(PlacementMode mode)
+    {
+        if (mode == null || mode == getPlacementMode())
+        {
+            return;
+        }
+        configManager.setConfiguration(WorldBuilderConfig.GROUP, "placementMode", mode);
+        clientThread.invokeLater(this::clearPlacementPreview);
     }
 
     private void mutate(PropPlacement selected, PlacementMutation mutation)
@@ -1601,6 +1682,20 @@ public class WorldBuilderPlugin extends Plugin
         else
         {
             log.debug("Station's Cozy Clutter startup message: {}", text);
+        }
+    }
+
+    private static final class PlacementTarget
+    {
+        private final LocalPoint renderPoint;
+        private final int offsetX;
+        private final int offsetY;
+
+        private PlacementTarget(LocalPoint renderPoint, int offsetX, int offsetY)
+        {
+            this.renderPoint = renderPoint;
+            this.offsetX = offsetX;
+            this.offsetY = offsetY;
         }
     }
 
