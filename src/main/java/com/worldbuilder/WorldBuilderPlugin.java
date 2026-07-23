@@ -94,6 +94,8 @@ public class WorldBuilderPlugin extends Plugin
     private static final int MAX_UNDO = 50;
     private static final int CATALOGUE_BATCH_SIZE = 750;
     private static final int PLACEMENT_ROTATION_STEP = 128;
+    private static final int NUDGE_STEP = 8;
+    private static final int MAX_NUDGE = 64;
     // These objects were incorrectly persisted as blocked by v0.2.0 when the
     // config cache was unavailable during the first LOGGED_IN callback.
     private static final Set<Integer> FALSE_BLOCKS_V020 = new HashSet<>(Arrays.asList(1, 1187, 15872, 42827));
@@ -135,6 +137,7 @@ public class WorldBuilderPlugin extends Plugin
     private final Map<String, List<RuneLiteObject>> rendered = new HashMap<>();
     private final Deque<List<PropPlacement>> undo = new ArrayDeque<>();
     private volatile PropPlacement copied;
+    private volatile String movingPlacementId;
     private volatile RuneLiteObject placementPreview;
     private volatile WorldPoint placementPreviewPoint;
     private volatile LocalPoint placementPreviewLocalPoint;
@@ -300,6 +303,7 @@ public class WorldBuilderPlugin extends Plugin
         placements.clear();
         undo.clear();
         copied = null;
+        movingPlacementId = null;
         placementPreviewPoint = null;
         placementMousePressConsumed = false;
         catalogue.clear();
@@ -421,9 +425,14 @@ public class WorldBuilderPlugin extends Plugin
         }
 
         PropPlacement probe = copied.duplicateAt(point.getX(), point.getY(), point.getPlane());
+        LocalPoint renderPoint = localPoint.plus(copied.offsetX, copied.offsetY);
+        if (!renderPoint.isInScene())
+        {
+            return;
+        }
         RuneLiteObject preview = client.createRuneLiteObject();
         preview.setModel(model);
-        preview.setLocation(localPoint, worldView.getPlane());
+        preview.setLocation(renderPoint, worldView.getPlane());
         preview.setOrientation(copied.rotation & 2047);
         preview.setZ(preview.getZ() - copied.height);
         preview.setRadius(Math.max(60, 60 * copied.scale / 128));
@@ -453,7 +462,7 @@ public class WorldBuilderPlugin extends Plugin
         }
         placementPreview = preview;
         placementPreviewPoint = point;
-        placementPreviewLocalPoint = localPoint;
+        placementPreviewLocalPoint = renderPoint;
     }
 
     private void rotatePlacementPreview(PropPlacement selected, int wheelRotation)
@@ -493,6 +502,7 @@ public class WorldBuilderPlugin extends Plugin
     private void cancelPlacement(String reason)
     {
         copied = null;
+        movingPlacementId = null;
         clearPlacementPreview();
         if (placementPreviewOwnsSafetyProbe)
         {
@@ -827,6 +837,16 @@ public class WorldBuilderPlugin extends Plugin
                 .onClick(entry -> mutate(selected, p -> p.scale = Math.min(1024, p.scale + 16)));
             menu.createMenuEntry(-1).setOption("Make placed object smaller").setType(MenuAction.RUNELITE)
                 .onClick(entry -> mutate(selected, p -> p.scale = Math.max(16, p.scale - 16)));
+            menu.createMenuEntry(-1).setOption("Nudge placed object north").setType(MenuAction.RUNELITE)
+                .onClick(entry -> mutate(selected, p -> p.offsetY = Math.min(MAX_NUDGE, p.offsetY + NUDGE_STEP)));
+            menu.createMenuEntry(-1).setOption("Nudge placed object east").setType(MenuAction.RUNELITE)
+                .onClick(entry -> mutate(selected, p -> p.offsetX = Math.min(MAX_NUDGE, p.offsetX + NUDGE_STEP)));
+            menu.createMenuEntry(-1).setOption("Nudge placed object south").setType(MenuAction.RUNELITE)
+                .onClick(entry -> mutate(selected, p -> p.offsetY = Math.max(-MAX_NUDGE, p.offsetY - NUDGE_STEP)));
+            menu.createMenuEntry(-1).setOption("Nudge placed object west").setType(MenuAction.RUNELITE)
+                .onClick(entry -> mutate(selected, p -> p.offsetX = Math.max(-MAX_NUDGE, p.offsetX - NUDGE_STEP)));
+            menu.createMenuEntry(-1).setOption("Move placed object").setType(MenuAction.RUNELITE)
+                .onClick(entry -> move(selected));
             menu.createMenuEntry(-1).setOption("Duplicate placed object").setType(MenuAction.RUNELITE)
                 .onClick(entry -> duplicate(selected));
             menu.createMenuEntry(-1).setOption("Delete placed object").setType(MenuAction.RUNELITE)
@@ -879,13 +899,49 @@ public class WorldBuilderPlugin extends Plugin
 
     private void placeCopied(WorldPoint point)
     {
-        if (copied == null || placements.size() >= config.maximumProps())
+        PropPlacement template = copied;
+        if (template == null)
+        {
+            return;
+        }
+
+        String movingId = movingPlacementId;
+        if (movingId != null)
+        {
+            PropPlacement selected = findById(movingId);
+            if (selected == null)
+            {
+                cancelPlacement("The object being moved is no longer available.");
+                return;
+            }
+
+            pushUndo();
+            selected.worldX = point.getX();
+            selected.worldY = point.getY();
+            selected.plane = point.getPlane();
+            selected.offsetX = template.offsetX;
+            selected.offsetY = template.offsetY;
+            selected.rotation = template.rotation;
+            savePlacements();
+            respawn(selected);
+            movingPlacementId = null;
+            copied = null;
+            clearPlacementPreview();
+            if (placementPreviewOwnsSafetyProbe)
+            {
+                placementPreviewOwnsSafetyProbe = false;
+            }
+            message("Moved " + selected.name + ".");
+            return;
+        }
+
+        if (placements.size() >= config.maximumProps())
         {
             message("The prop limit has been reached.");
             return;
         }
         pushUndo();
-        PropPlacement placement = copied.duplicateAt(point.getX(), point.getY(), point.getPlane());
+        PropPlacement placement = template.duplicateAt(point.getX(), point.getY(), point.getPlane());
         placements.add(placement);
         savePlacements();
         if (placementPreviewOwnsSafetyProbe && activeSafetyProbe != null
@@ -907,6 +963,14 @@ public class WorldBuilderPlugin extends Plugin
             "Copied placed " + selected.name + ". Scroll to rotate and left-click to place.");
     }
 
+    private void move(PropPlacement selected)
+    {
+        PropPlacement template = selected.copy();
+        selectPlacementTemplate(template,
+            "Moving " + selected.name + ". Scroll to rotate, left-click to place; right-click or Escape cancels.");
+        movingPlacementId = selected.id;
+    }
+
     private void selectPlacementTemplate(PropPlacement template, String status)
     {
         clearPlacementPreview();
@@ -914,6 +978,7 @@ public class WorldBuilderPlugin extends Plugin
         {
             clearSafetyProbe(false);
         }
+        movingPlacementId = null;
         copied = template;
         message(status);
     }
@@ -1211,9 +1276,14 @@ public class WorldBuilderPlugin extends Plugin
             {
                 continue;
             }
+            LocalPoint renderPoint = local.plus(placement.offsetX, placement.offsetY);
+            if (!renderPoint.isInScene())
+            {
+                continue;
+            }
             RuneLiteObject object = client.createRuneLiteObject();
             object.setModel(model);
-            object.setLocation(local, worldView.getPlane());
+            object.setLocation(renderPoint, worldView.getPlane());
             object.setOrientation(placement.rotation & 2047);
             object.setZ(object.getZ() - placement.height);
             object.setRadius(Math.max(60, 60 * placement.scale / 128));
@@ -1339,6 +1409,18 @@ public class WorldBuilderPlugin extends Plugin
             if (p.worldX == point.getX() && p.worldY == point.getY() && p.plane == point.getPlane())
             {
                 return p;
+            }
+        }
+        return null;
+    }
+
+    private PropPlacement findById(String id)
+    {
+        for (PropPlacement placement : placements)
+        {
+            if (placement.id.equals(id))
+            {
+                return placement;
             }
         }
         return null;

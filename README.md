@@ -27,11 +27,11 @@ The `run` task starts RuneLite in developer mode with Station's Cozy Clutter loa
 
 You can also hold **Shift**, right-click existing scenery, and choose **Copy to Station's Cozy Clutter**. Shift-right-click placement remains available as a fallback workflow.
 
-Shift-right-click a tile containing a placed prop to rotate, raise, lower, resize, duplicate, or delete the newest prop on that tile.
+Shift-right-click a tile containing a placed prop to rotate, raise, lower, resize, nudge, move, duplicate, or delete the newest prop on that tile. Nudging moves a prop north, east, south, or west in small 1/16-tile steps, up to half a tile from its anchor. **Move placed object** attaches the existing prop to the cursor so it can be repositioned without losing its size, height, rotation, animation, or nudge.
 
 ## Tilepacks
 
-From the ground-tile **Station's Cozy Clutter** menu, use **Export Tilepack** to copy a `WB1:` code. Use **Import Tilepack** after copying someone else's code. Imported objects stay anchored to their saved world coordinates.
+From the ground-tile **Station's Cozy Clutter** menu, use **Export Tilepack** to copy a `WB1:` code. Use **Import Tilepack** after copying someone else's code. Imported objects retain their saved world coordinates and precise nudge offsets. Older Tilepacks without nudge data remain centred on their original tiles.
 
 Tilepacks contain only cosmetic client-side placements. Sharing a Tilepack does not change the game server or make the objects visible to players who have not imported it.
 

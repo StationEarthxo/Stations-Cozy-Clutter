@@ -17,6 +17,8 @@ final class PropPlacement
     int worldX;
     int worldY;
     int plane;
+    int offsetX;
+    int offsetY;
     int rotation;
     int height;
     int scale = 128;
@@ -40,6 +42,8 @@ final class PropPlacement
         p.worldX = worldX;
         p.worldY = worldY;
         p.plane = plane;
+        p.offsetX = offsetX;
+        p.offsetY = offsetY;
         p.rotation = rotation;
         p.height = height;
         p.scale = scale;
@@ -62,6 +66,8 @@ final class PropPlacement
             && ((objectId >= 0 && npcId == -1) || (npcId >= 0 && objectId == -1))
             && modelId == -1 && animationId >= -1
             && worldX >= 0 && worldY >= 0 && plane >= 0 && plane <= 3
+            && offsetX >= -64 && offsetX <= 64
+            && offsetY >= -64 && offsetY <= 64
             && scale >= 16 && scale <= 1024;
     }
 

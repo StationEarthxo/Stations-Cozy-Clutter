@@ -25,6 +25,8 @@ public class WorldBuilderPluginTest
         prop.worldY = 3201;
         prop.plane = 0;
         prop.animationId = 472;
+        prop.offsetX = 24;
+        prop.offsetY = -16;
 
         Tilepack input = new Tilepack();
         input.name = "Test house";
@@ -36,6 +38,8 @@ public class WorldBuilderPluginTest
         Assert.assertEquals(1, output.props.size());
         Assert.assertEquals(100, output.props.get(0).objectId);
         Assert.assertEquals(472, output.props.get(0).animationId);
+        Assert.assertEquals(24, output.props.get(0).offsetX);
+        Assert.assertEquals(-16, output.props.get(0).offsetY);
     }
 
     @Test
@@ -134,6 +138,29 @@ public class WorldBuilderPluginTest
         Assert.assertEquals(123, copy.npcId);
         Assert.assertEquals(456, copy.animationId);
         Assert.assertTrue(copy.animationLoop);
+    }
+
+    @Test
+    public void nudgesAreBoundedAndOldPlacementsDefaultToTileCentre()
+    {
+        PropPlacement prop = new PropPlacement();
+        prop.name = "Poster";
+        prop.objectId = 100;
+        prop.worldX = 3200;
+        prop.worldY = 3200;
+        Assert.assertTrue(prop.isValid());
+        Assert.assertEquals(0, prop.offsetX);
+        Assert.assertEquals(0, prop.offsetY);
+
+        prop.offsetX = 64;
+        prop.offsetY = -64;
+        Assert.assertTrue(prop.isValid());
+        PropPlacement copy = prop.copy();
+        Assert.assertEquals(64, copy.offsetX);
+        Assert.assertEquals(-64, copy.offsetY);
+
+        prop.offsetX = 65;
+        Assert.assertFalse(prop.isValid());
     }
 
 }
