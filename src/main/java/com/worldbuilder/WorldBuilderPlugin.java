@@ -35,6 +35,7 @@ import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.Animation;
 import net.runelite.api.DecorativeObject;
 import net.runelite.api.GameObject;
 import net.runelite.api.GameState;
@@ -80,9 +81,8 @@ import org.slf4j.LoggerFactory;
 
 @PluginDescriptor(
     name = "Station's Cozy Clutter",
-    description = "Build with client-side game scenery and share it as Tilepacks",
-    tags = {"world", "builder", "objects", "housing", "tilepack"}
-   
+    description = "Build with static and animated client-side scenery and share it as Tilepacks",
+    tags = {"world", "builder", "objects", "npc", "animation", "housing", "tilepack"}
 )
 public class WorldBuilderPlugin extends Plugin
 {
@@ -120,6 +120,9 @@ public class WorldBuilderPlugin extends Plugin
     private ObjectModelFactory modelFactory;
 
     @Inject
+    private NpcModelFactory npcModelFactory;
+
+    @Inject
     private ClientToolbar clientToolbar;
 
     @Inject
@@ -142,6 +145,8 @@ public class WorldBuilderPlugin extends Plugin
     private final List<CatalogEntry> catalogue = new ArrayList<>();
     private int[] catalogueIds;
     private int catalogueCursor;
+    private int[] npcCatalogueIds;
+    private int npcCatalogueCursor;
     private boolean catalogueComplete;
     private int quarantinedRawProps;
     private final Set<Integer> blockedObjectIds = new HashSet<>(Collections.singleton(59170));
@@ -291,6 +296,7 @@ public class WorldBuilderPlugin extends Plugin
         clearPlacementPreview();
         clearRendered();
         modelFactory.clear();
+        npcModelFactory.clear();
         placements.clear();
         undo.clear();
         copied = null;
@@ -298,7 +304,9 @@ public class WorldBuilderPlugin extends Plugin
         placementMousePressConsumed = false;
         catalogue.clear();
         catalogueIds = null;
+        npcCatalogueIds = null;
         catalogueCursor = 0;
+        npcCatalogueCursor = 0;
         catalogueComplete = false;
         quarantinedRawProps = 0;
         blockedObjectIds.clear();
@@ -395,18 +403,18 @@ public class WorldBuilderPlugin extends Plugin
         }
         clearPlacementPreview();
 
-        if (blockedObjectIds.contains(copied.objectId))
+        if (isBlocked(copied))
         {
             cancelPlacement("That object has been blocked by the safety system.");
             return;
         }
-        if (!trustedObjectIds.contains(copied.objectId) && activeSafetyProbe != null
-            && activeSafetyProbe.objectId != copied.objectId)
+        if (!isTrusted(copied) && activeSafetyProbe != null
+            && !sameSource(activeSafetyProbe, copied))
         {
             return;
         }
 
-        Model model = modelFactory.create(copied);
+        Model model = createModel(copied);
         if (model == null)
         {
             return;
@@ -419,8 +427,13 @@ public class WorldBuilderPlugin extends Plugin
         preview.setOrientation(copied.rotation & 2047);
         preview.setZ(preview.getZ() - copied.height);
         preview.setRadius(Math.max(60, 60 * copied.scale / 128));
+        if (!applyAnimation(preview, copied))
+        {
+            preview.setActive(false);
+            return;
+        }
 
-        if (!trustedObjectIds.contains(copied.objectId) && activeSafetyProbe == null)
+        if (!isTrusted(copied) && activeSafetyProbe == null)
         {
             beginSafetyProbe(probe);
             placementPreviewOwnsSafetyProbe = true;
@@ -495,14 +508,18 @@ public class WorldBuilderPlugin extends Plugin
             return;
         }
         catalogueIds = client.getIndexConfig().getFileIds(6);
-        if (catalogueIds == null)
+        npcCatalogueIds = client.getIndexConfig().getFileIds(9);
+        if (catalogueIds == null || npcCatalogueIds == null)
         {
+            catalogueIds = null;
+            npcCatalogueIds = null;
             return;
         }
         Arrays.sort(catalogueIds);
+        Arrays.sort(npcCatalogueIds);
         if (panel != null)
         {
-            panel.setCatalogueProgress(0, catalogueIds.length);
+            panel.setCatalogueProgress(0, catalogueIds.length + npcCatalogueIds.length);
         }
     }
 
@@ -513,8 +530,8 @@ public class WorldBuilderPlugin extends Plugin
             beginCatalogue();
             return;
         }
-        int end = Math.min(catalogueIds.length, catalogueCursor + CATALOGUE_BATCH_SIZE);
-        for (; catalogueCursor < end; catalogueCursor++)
+        int objectEnd = Math.min(catalogueIds.length, catalogueCursor + CATALOGUE_BATCH_SIZE);
+        for (; catalogueCursor < objectEnd; catalogueCursor++)
         {
             int objectId = catalogueIds[catalogueCursor];
             try
@@ -537,26 +554,69 @@ public class WorldBuilderPlugin extends Plugin
                     continue;
                 }
                 int type = definition.modelTypes == null ? 10 : definition.modelTypes[0];
-                catalogue.add(new CatalogEntry(objectId, type, definition.name));
+                catalogue.add(definition.animationId >= 0
+                    ? CatalogEntry.animatedObject(objectId, type, definition.animationId, definition.name)
+                    : new CatalogEntry(objectId, type, definition.name));
             }
             catch (RuntimeException ex)
             {
                 log.trace("Skipping catalogue object {}", objectId, ex);
             }
         }
-        if (panel != null && catalogueCursor % 3000 < CATALOGUE_BATCH_SIZE)
+        if (catalogueCursor >= catalogueIds.length)
         {
-            panel.setCatalogueProgress(catalogueCursor, catalogueIds.length);
+            int npcEnd = Math.min(npcCatalogueIds.length, npcCatalogueCursor + CATALOGUE_BATCH_SIZE);
+            for (; npcCatalogueCursor < npcEnd; npcCatalogueCursor++)
+            {
+                int npcId = npcCatalogueIds[npcCatalogueCursor];
+                try
+                {
+                    byte[] bytes = client.getIndexConfig().loadData(9, npcId);
+                    if (bytes == null)
+                    {
+                        if (panel != null)
+                        {
+                            panel.catalogueWaitingForCache();
+                        }
+                        return;
+                    }
+                    NpcDefinitionData definition = NpcDefinitionDecoder.decode(bytes);
+                    if (!definition.isSafeForCustomRendering() || blockedObjectIds.contains(-(npcId + 1))
+                        || Strings.isNullOrEmpty(definition.name) || "null".equalsIgnoreCase(definition.name))
+                    {
+                        continue;
+                    }
+                    Set<Integer> animations = new HashSet<>();
+                    addNpcAnimation(npcId, definition, animations, definition.standingAnimation, "Idle");
+                    addNpcAnimation(npcId, definition, animations, definition.walkingAnimation, "Walk");
+                    addNpcAnimation(npcId, definition, animations, definition.runAnimation, "Run");
+                    addNpcAnimation(npcId, definition, animations, definition.crawlAnimation, "Crawl");
+                }
+                catch (RuntimeException ex)
+                {
+                    log.trace("Skipping catalogue NPC {}", npcId, ex);
+                }
+            }
         }
-        if (panel != null && catalogueCursor <= CATALOGUE_BATCH_SIZE && !catalogue.isEmpty())
+
+        int scanned = catalogueCursor + npcCatalogueCursor;
+        int total = catalogueIds.length + npcCatalogueIds.length;
+        if (panel != null && scanned % 3000 < CATALOGUE_BATCH_SIZE)
+        {
+            panel.setCatalogueProgress(scanned, total);
+        }
+        if (panel != null && scanned <= CATALOGUE_BATCH_SIZE && !catalogue.isEmpty())
         {
             // Make the browser useful immediately instead of leaving it blank
             // until every object in the game has been inspected.
             panel.showResults(catalogue.stream().limit(24).collect(Collectors.toList()), false);
         }
-        if (catalogueCursor >= catalogueIds.length)
+        if (catalogueCursor >= catalogueIds.length && npcCatalogueCursor >= npcCatalogueIds.length)
         {
-            catalogue.sort(Comparator.comparing(entry -> entry.name.toLowerCase(Locale.ROOT)));
+            catalogue.sort(Comparator
+                .comparing((CatalogEntry entry) -> entry.name.toLowerCase(Locale.ROOT))
+                .thenComparing(entry -> entry.animationName == null ? "" : entry.animationName)
+                .thenComparingInt(CatalogEntry::sourceId));
             catalogueComplete = true;
             if (panel != null)
             {
@@ -565,22 +625,42 @@ public class WorldBuilderPlugin extends Plugin
         }
     }
 
-    void searchCatalogue(String query)
+    void searchCatalogue(String query, int filter)
     {
         final String needle = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
         clientThread.invokeLater(() ->
         {
-            List<CatalogEntry> matches = needle.isEmpty()
-                ? catalogue.stream().limit(24).collect(Collectors.toList())
-                : catalogue.stream()
-                    .filter(entry -> entry.name.toLowerCase(Locale.ROOT).contains(needle)
-                        || Integer.toString(entry.objectId).equals(needle))
-                    .collect(Collectors.toList());
+            List<CatalogEntry> matches = catalogue.stream()
+                .filter(entry -> matchesFilter(entry, filter))
+                .filter(entry -> needle.isEmpty()
+                    || entry.name.toLowerCase(Locale.ROOT).contains(needle)
+                    || (entry.animationName != null
+                        && entry.animationName.toLowerCase(Locale.ROOT).contains(needle))
+                    || Integer.toString(entry.sourceId()).equals(needle)
+                    || Integer.toString(entry.animationId).equals(needle))
+                .collect(Collectors.toList());
             if (panel != null)
             {
                 panel.showResults(matches, catalogueComplete);
             }
         });
+    }
+
+    private static boolean matchesFilter(CatalogEntry entry, int filter)
+    {
+        switch (filter)
+        {
+            case 1:
+                return !entry.isAnimated();
+            case 2:
+                return entry.isAnimated();
+            case 3:
+                return entry.isAnimated() && !entry.isNpc();
+            case 4:
+                return entry.isAnimated() && entry.isNpc();
+            default:
+                return true;
+        }
     }
 
     void selectCatalogueEntry(CatalogEntry entry)
@@ -592,8 +672,12 @@ public class WorldBuilderPlugin extends Plugin
             template.objectId = entry.objectId;
             template.objectType = entry.objectType;
             template.objectOrientation = 0;
+            template.npcId = entry.npcId;
+            template.animationId = entry.animationId;
+            template.animationLoop = true;
             selectPlacementTemplate(template,
-                "Selected " + entry.name + ". Scroll to rotate, left-click to place; right-click or Escape cancels.");
+                "Selected " + entry.name + (entry.isAnimated() ? " (animated)" : "")
+                    + ". Scroll to rotate, left-click to place; right-click or Escape cancels.");
         });
     }
 
@@ -605,7 +689,9 @@ public class WorldBuilderPlugin extends Plugin
             {
                 return;
             }
-            Model model = modelFactory.createPreview(entry.objectId, entry.objectType);
+            Model model = entry.isNpc()
+                ? npcModelFactory.createPreview(entry.npcId)
+                : modelFactory.createPreview(entry.objectId, entry.objectType);
             BufferedImage image = model == null ? null : ModelPreviewRenderer.render(model, 91, 91);
             SwingUtilities.invokeLater(() ->
             {
@@ -803,7 +889,7 @@ public class WorldBuilderPlugin extends Plugin
         placements.add(placement);
         savePlacements();
         if (placementPreviewOwnsSafetyProbe && activeSafetyProbe != null
-            && activeSafetyProbe.objectId == placement.objectId)
+            && sameSource(activeSafetyProbe, placement))
         {
             // The probe now protects a saved, placed copy rather than only the
             // cursor ghost. Let it finish in the background even if build mode
@@ -882,7 +968,7 @@ public class WorldBuilderPlugin extends Plugin
         {
             Tilepack pack = new Tilepack();
             pack.props = placements.stream()
-                .filter(prop -> !blockedObjectIds.contains(prop.objectId))
+                .filter(prop -> !isBlocked(prop))
                 .map(PropPlacement::copy)
                 .collect(Collectors.toList());
             if (pack.props.isEmpty())
@@ -909,7 +995,7 @@ public class WorldBuilderPlugin extends Plugin
             Tilepack pack = TilepackCodec.decode(gson, String.valueOf(clipboard));
             List<PropPlacement> valid = pack.props.stream()
                 .filter(PropPlacement::isValid)
-                .filter(prop -> !blockedObjectIds.contains(prop.objectId))
+                .filter(prop -> !isBlocked(prop))
                 .collect(Collectors.toList());
             int skipped = pack.props.size() - valid.size();
             if (valid.isEmpty())
@@ -965,11 +1051,12 @@ public class WorldBuilderPlugin extends Plugin
             try
             {
                 PropPlacement interrupted = gson.fromJson(probeJson, PropPlacement.class);
-                if (interrupted != null && interrupted.objectId >= 0)
+                if (interrupted != null && (interrupted.objectId >= 0 || interrupted.npcId >= 0))
                 {
-                    blockedObjectIds.add(interrupted.objectId);
-                    trustedObjectIds.remove(interrupted.objectId);
-                    recoveredUnsafeName = interrupted.name + " (#" + interrupted.objectId + ")";
+                    blockedObjectIds.add(safetyKey(interrupted));
+                    trustedObjectIds.remove(safetyKey(interrupted));
+                    recoveredUnsafeName = interrupted.name + " (#"
+                        + (interrupted.npcId >= 0 ? interrupted.npcId : interrupted.objectId) + ")";
                     saveIntegerSet(BLOCKED_OBJECTS_KEY, blockedObjectIds);
                     saveIntegerSet(TRUSTED_OBJECTS_KEY, trustedObjectIds);
                 }
@@ -1023,7 +1110,7 @@ public class WorldBuilderPlugin extends Plugin
             {
                 saved.stream()
                     .filter(PropPlacement::isValid)
-                    .filter(prop -> !blockedObjectIds.contains(prop.objectId))
+                    .filter(prop -> !isBlocked(prop))
                     .limit(config.maximumProps())
                     .forEach(placements::add);
                 quarantinedRawProps = saved.size() - placements.size();
@@ -1070,21 +1157,22 @@ public class WorldBuilderPlugin extends Plugin
             {
                 continue;
             }
-            if (blockedObjectIds.contains(placement.objectId))
+            if (isBlocked(placement))
             {
                 rendered.put(placement.id, Collections.emptyList());
                 continue;
             }
 
-            boolean trusted = trustedObjectIds.contains(placement.objectId);
-            if (!trusted && activeSafetyProbe != null && activeSafetyProbe.objectId != placement.objectId)
+            boolean trusted = isTrusted(placement);
+            if (!trusted && activeSafetyProbe != null && !sameSource(activeSafetyProbe, placement))
             {
                 // Only one unknown model is tested at a time so an interrupted
                 // session can identify the exact offender.
                 continue;
             }
             boolean needsProbe = !trusted && activeSafetyProbe == null;
-            if (!spawn(placement, needsProbe) && modelFactory.isPermanentlyFailed(placement))
+            if (!spawn(placement, needsProbe) && placement.npcId < 0
+                && modelFactory.isPermanentlyFailed(placement))
             {
                 // Decode/model incompatibility means "not renderable by this
                 // version", not "dangerous". Keep the placement intact and
@@ -1097,7 +1185,7 @@ public class WorldBuilderPlugin extends Plugin
 
     private boolean spawn(PropPlacement placement, boolean needsProbe)
     {
-        Model model = modelFactory.create(placement);
+        Model model = createModel(placement);
         if (model == null)
         {
             return false;
@@ -1129,6 +1217,11 @@ public class WorldBuilderPlugin extends Plugin
             object.setOrientation(placement.rotation & 2047);
             object.setZ(object.getZ() - placement.height);
             object.setRadius(Math.max(60, 60 * placement.scale / 128));
+            if (!applyAnimation(object, placement))
+            {
+                object.setActive(false);
+                continue;
+            }
             if (needsProbe && activeSafetyProbe == null)
             {
                 beginSafetyProbe(placement);
@@ -1161,7 +1254,7 @@ public class WorldBuilderPlugin extends Plugin
         despawn(placement.id);
         if (activeSafetyProbe == null)
         {
-            spawn(placement, !trustedObjectIds.contains(placement.objectId));
+            spawn(placement, !isTrusted(placement));
         }
     }
 
@@ -1191,7 +1284,7 @@ public class WorldBuilderPlugin extends Plugin
     {
         if (activeSafetyProbe != null)
         {
-            trustedObjectIds.add(activeSafetyProbe.objectId);
+            trustedObjectIds.add(safetyKey(activeSafetyProbe));
             saveIntegerSet(TRUSTED_OBJECTS_KEY, trustedObjectIds);
         }
         clearSafetyProbe(false);
@@ -1202,7 +1295,7 @@ public class WorldBuilderPlugin extends Plugin
     {
         if (trust && activeSafetyProbe != null)
         {
-            trustedObjectIds.add(activeSafetyProbe.objectId);
+            trustedObjectIds.add(safetyKey(activeSafetyProbe));
             saveIntegerSet(TRUSTED_OBJECTS_KEY, trustedObjectIds);
         }
         activeSafetyProbe = null;
@@ -1213,16 +1306,17 @@ public class WorldBuilderPlugin extends Plugin
 
     private void blockObject(PropPlacement placement)
     {
-        blockedObjectIds.add(placement.objectId);
-        trustedObjectIds.remove(placement.objectId);
-        if (copied != null && copied.objectId == placement.objectId)
+        blockedObjectIds.add(safetyKey(placement));
+        trustedObjectIds.remove(safetyKey(placement));
+        if (copied != null && sameSource(copied, placement))
         {
             copied = null;
             clearPlacementPreview();
         }
         saveIntegerSet(BLOCKED_OBJECTS_KEY, blockedObjectIds);
         saveIntegerSet(TRUSTED_OBJECTS_KEY, trustedObjectIds);
-        message("Blocked unsupported object " + placement.name + " (#" + placement.objectId + ") for safety.");
+        message("Blocked unsupported decoration " + placement.name + " (#"
+            + (placement.npcId >= 0 ? placement.npcId : placement.objectId) + ") for safety.");
     }
 
     private void captureObject(TileObject object)
@@ -1352,6 +1446,66 @@ public class WorldBuilderPlugin extends Plugin
             return wall.getRenderable1() != null ? wall.getRenderable1() : wall.getRenderable2();
         }
         return null;
+    }
+
+    private Model createModel(PropPlacement placement)
+    {
+        return placement.npcId >= 0 ? npcModelFactory.create(placement) : modelFactory.create(placement);
+    }
+
+    private boolean applyAnimation(RuneLiteObject object, PropPlacement placement)
+    {
+        if (placement.animationId < 0)
+        {
+            return true;
+        }
+        try
+        {
+            Animation animation = client.loadAnimation(placement.animationId);
+            if (animation == null)
+            {
+                return false;
+            }
+            object.setAnimation(animation);
+            object.setShouldLoop(placement.animationLoop);
+            return true;
+        }
+        catch (RuntimeException | AssertionError ex)
+        {
+            log.debug("Unable to apply animation {} to {}", placement.animationId, placement.name, ex);
+            return false;
+        }
+    }
+
+    private void addNpcAnimation(int npcId, NpcDefinitionData definition, Set<Integer> seen,
+        int animationId, String animationName)
+    {
+        if (animationId >= 0 && seen.add(animationId))
+        {
+            catalogue.add(CatalogEntry.animatedNpc(
+                npcId, animationId, animationName, definition.name));
+        }
+    }
+
+    private static int safetyKey(PropPlacement placement)
+    {
+        return placement.npcId >= 0 ? -(placement.npcId + 1) : placement.objectId;
+    }
+
+    private boolean isBlocked(PropPlacement placement)
+    {
+        return blockedObjectIds.contains(safetyKey(placement));
+    }
+
+    private boolean isTrusted(PropPlacement placement)
+    {
+        return trustedObjectIds.contains(safetyKey(placement));
+    }
+
+    private static boolean sameSource(PropPlacement first, PropPlacement second)
+    {
+        return first != null && second != null
+            && first.objectId == second.objectId && first.npcId == second.npcId;
     }
 
     private void message(String text)

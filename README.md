@@ -19,10 +19,11 @@ The `run` task starts RuneLite in developer mode with Station's Cozy Clutter loa
 
 1. Enable **Station's Cozy Clutter** in RuneLite's plugin list.
 2. Open the coloured-block **Station's Cozy Clutter** button in RuneLite's sidebar.
-3. Search for an object's name and browse every match with the page arrows.
-4. Click its 3D preview to attach the object to your cursor.
-5. Move over the world, use the mouse wheel to rotate the preview, and left-click to place as many copies as you like.
-6. Right-click or press **Escape** to leave placement mode.
+3. Choose **All decorations**, **Static objects**, **Animated**, **Animated objects**, or **Animated NPCs**.
+4. Search by name, source ID, or animation ID and browse every match with the page arrows.
+5. Click its 3D preview to attach the decoration to your cursor. Animated entries automatically use their matched model and animation.
+6. Move over the world, use the mouse wheel to rotate the preview, and left-click to place as many copies as you like.
+7. Right-click or press **Escape** to leave placement mode.
 
 You can also hold **Shift**, right-click existing scenery, and choose **Copy to Station's Cozy Clutter**. Shift-right-click placement remains available as a fallback workflow.
 
@@ -37,8 +38,9 @@ Tilepacks contain only cosmetic client-side placements. Sharing a Tilepack does 
 ## Current limitations
 
 - Props are visual only and have no collision.
-- Static scenery is the main target. Animated or transformed objects may use their static base model.
+- Animated scenery and NPC idle/walk/run/crawl loops are matched from game-cache definitions. Some definitions do not expose every quest or action animation.
+- Variable/transformed definitions remain excluded when the cache cannot identify one dependable model.
 - Some unusually constructed objects may need a future catalogue entry to reproduce perfectly after restarting.
 - Legacy Tilepacks containing unrestricted raw cache-model IDs are skipped because some raw models can crash RuneLite. Named catalogue objects remain supported.
-- Animated, transformed, extended-ID, malformed, and known-incompatible models are excluded from the public catalogue.
-- New object types are safety-probed for five healthy game ticks. If RuneLite is interrupted during activation, that object is automatically quarantined next launch to prevent a crash loop.
+- Malformed and known-incompatible models are excluded from the public catalogue.
+- New object and NPC sources are safety-probed for five healthy game ticks. If RuneLite is interrupted during activation, that source is automatically quarantined next launch to prevent a crash loop.

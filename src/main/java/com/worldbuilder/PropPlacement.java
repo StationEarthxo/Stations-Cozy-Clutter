@@ -11,6 +11,9 @@ final class PropPlacement
     int objectType = 10;
     int objectOrientation;
     int modelId = -1;
+    int npcId = -1;
+    int animationId = -1;
+    boolean animationLoop = true;
     int worldX;
     int worldY;
     int plane;
@@ -31,6 +34,9 @@ final class PropPlacement
         p.objectType = objectType;
         p.objectOrientation = objectOrientation;
         p.modelId = modelId;
+        p.npcId = npcId;
+        p.animationId = animationId;
+        p.animationLoop = animationLoop;
         p.worldX = worldX;
         p.worldY = worldY;
         p.plane = plane;
@@ -53,7 +59,8 @@ final class PropPlacement
     boolean isValid()
     {
         return id != null && name != null
-            && objectId >= 0 && modelId == -1
+            && ((objectId >= 0 && npcId == -1) || (npcId >= 0 && objectId == -1))
+            && modelId == -1 && animationId >= -1
             && worldX >= 0 && worldY >= 0 && plane >= 0 && plane <= 3
             && scale >= 16 && scale <= 1024;
     }

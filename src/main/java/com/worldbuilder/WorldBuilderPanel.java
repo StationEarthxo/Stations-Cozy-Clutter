@@ -12,6 +12,7 @@ import java.util.Map;
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -32,6 +33,8 @@ final class WorldBuilderPanel extends PluginPanel
 
     private final WorldBuilderPlugin plugin;
     private final JTextField search = new JTextField();
+    private final JComboBox<String> catalogueType = new JComboBox<>(
+        new String[]{"All decorations", "Static objects", "Animated", "Animated objects", "Animated NPCs"});
     private final JLabel status = new JLabel("Loading object catalogue…");
     private final JPanel results = new JPanel(new GridLayout(0, 2, 5, 5));
     private final JScrollPane resultsScroll = new JScrollPane(results);
@@ -43,10 +46,10 @@ final class WorldBuilderPanel extends PluginPanel
     private List<CatalogEntry> currentResults = Collections.emptyList();
     private int currentPage;
     private boolean currentResultsComplete;
-    private final Map<Integer, ImageIcon> iconCache = new LinkedHashMap<Integer, ImageIcon>(ICON_CACHE_SIZE, .75f, true)
+    private final Map<String, ImageIcon> iconCache = new LinkedHashMap<String, ImageIcon>(ICON_CACHE_SIZE, .75f, true)
     {
         @Override
-        protected boolean removeEldestEntry(Map.Entry<Integer, ImageIcon> eldest)
+        protected boolean removeEldestEntry(Map.Entry<String, ImageIcon> eldest)
         {
             return size() > ICON_CACHE_SIZE;
         }
@@ -63,8 +66,12 @@ final class WorldBuilderPanel extends PluginPanel
         JLabel title = new JLabel("STATION'S COZY CLUTTER", SwingConstants.CENTER);
         title.setForeground(Color.WHITE);
         header.add(title, BorderLayout.NORTH);
-        search.setToolTipText("Search by object name or ID");
-        header.add(search, BorderLayout.CENTER);
+        search.setToolTipText("Search by decoration name, source ID, or animation ID");
+        JPanel searchArea = new JPanel(new GridLayout(0, 1, 0, 4));
+        searchArea.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        searchArea.add(catalogueType);
+        searchArea.add(search);
+        header.add(searchArea, BorderLayout.CENTER);
         status.setForeground(Color.LIGHT_GRAY);
         status.setHorizontalAlignment(SwingConstants.CENTER);
         header.add(status, BorderLayout.SOUTH);
@@ -88,7 +95,7 @@ final class WorldBuilderPanel extends PluginPanel
         pager.add(nextPage, BorderLayout.EAST);
         add(pager, BorderLayout.SOUTH);
 
-        searchTimer = new Timer(220, event -> plugin.searchCatalogue(search.getText()));
+        searchTimer = new Timer(220, event -> runSearch());
         searchTimer.setRepeats(false);
         search.getDocument().addDocumentListener(new DocumentListener()
         {
@@ -96,19 +103,21 @@ final class WorldBuilderPanel extends PluginPanel
             @Override public void removeUpdate(DocumentEvent event) { searchTimer.restart(); }
             @Override public void changedUpdate(DocumentEvent event) { searchTimer.restart(); }
         });
+        catalogueType.addActionListener(event -> runSearch());
     }
 
     void setCatalogueProgress(int loaded, int total)
     {
-        SwingUtilities.invokeLater(() -> status.setText(total <= 0 ? "Loading…" : loaded + " / " + total + " objects scanned"));
+        SwingUtilities.invokeLater(() -> status.setText(total <= 0 ? "Loading..."
+            : loaded + " / " + total + " definitions scanned"));
     }
 
     void catalogueReady(int count)
     {
         SwingUtilities.invokeLater(() ->
         {
-            status.setText(count + " placeable objects — type to search");
-            plugin.searchCatalogue(search.getText());
+            status.setText(count + " decorations loaded - type to search");
+            runSearch();
         });
     }
 
@@ -151,15 +160,21 @@ final class WorldBuilderPanel extends PluginPanel
         for (int i = start; i < end; i++)
         {
             CatalogEntry entry = currentResults.get(i);
-            JButton button = new JButton("<html><center>" + escape(entry.name) + "<br><small>#" + entry.objectId + "</small></center></html>");
+            String detail = entry.isAnimated()
+                ? entry.sourceLabel() + " " + entry.sourceId() + " \u2022 Anim " + entry.animationId
+                : "Object #" + entry.objectId;
+            String label = entry.isNpc() && entry.animationName != null
+                ? entry.name + " \u2014 " + entry.animationName : entry.name;
+            JButton button = new JButton("<html><center>" + escape(label)
+                + "<br><small>" + escape(detail) + "</small></center></html>");
             button.setHorizontalTextPosition(SwingConstants.CENTER);
             button.setVerticalTextPosition(SwingConstants.BOTTOM);
             button.setPreferredSize(new Dimension(101, 128));
-            button.setToolTipText(entry.name + " (object " + entry.objectId + ")");
+            button.setToolTipText(label + " (" + detail + ")");
             button.setBackground(ColorScheme.DARKER_GRAY_COLOR);
             button.setBorder(BorderFactory.createLineBorder(ColorScheme.MEDIUM_GRAY_COLOR));
             button.addActionListener(event -> plugin.selectCatalogueEntry(entry));
-            ImageIcon cached = iconCache.get(entry.objectId);
+            ImageIcon cached = iconCache.get(entry.cacheKey());
             if (cached != null)
             {
                 button.setIcon(cached);
@@ -171,7 +186,7 @@ final class WorldBuilderPanel extends PluginPanel
                     if (image != null && generation == resultGeneration)
                     {
                         ImageIcon icon = new ImageIcon(image);
-                        iconCache.put(entry.objectId, icon);
+                        iconCache.put(entry.cacheKey(), icon);
                         button.setIcon(icon);
                     }
                 });
@@ -199,6 +214,11 @@ final class WorldBuilderPanel extends PluginPanel
     boolean isPreviewGenerationCurrent(int generation)
     {
         return generation == resultGeneration;
+    }
+
+    private void runSearch()
+    {
+        plugin.searchCatalogue(search.getText(), catalogueType.getSelectedIndex());
     }
 
     private static String escape(String text)

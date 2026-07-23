@@ -24,6 +24,7 @@ public class WorldBuilderPluginTest
         prop.worldX = 3200;
         prop.worldY = 3201;
         prop.plane = 0;
+        prop.animationId = 472;
 
         Tilepack input = new Tilepack();
         input.name = "Test house";
@@ -34,6 +35,7 @@ public class WorldBuilderPluginTest
         Assert.assertEquals("Test house", output.name);
         Assert.assertEquals(1, output.props.size());
         Assert.assertEquals(100, output.props.get(0).objectId);
+        Assert.assertEquals(472, output.props.get(0).animationId);
     }
 
     @Test
@@ -78,20 +80,60 @@ public class WorldBuilderPluginTest
     }
 
     @Test
-    public void animatedObjectsAreRejectedButExtendedModelEncodingIsSupported()
+    public void animatedObjectsAndExtendedModelEncodingAreSupported()
     {
         byte[] animatedBytes = {
             1, 1, 0, 42, 10,
             24, 0, 5,
             0
         };
-        Assert.assertFalse(ObjectDefinitionDecoder.decode(animatedBytes).isSafeForCustomRendering());
+        ObjectDefinitionData animated = ObjectDefinitionDecoder.decode(animatedBytes);
+        Assert.assertTrue(animated.isSafeForCustomRendering());
+        Assert.assertEquals(5, animated.animationId);
 
         byte[] extendedBytes = {
             6, 1, 0, 1, 0, 0, 10,
             0
         };
         Assert.assertTrue(ObjectDefinitionDecoder.decode(extendedBytes).isSafeForCustomRendering());
+    }
+
+    @Test
+    public void npcDecoderLinksModelsAndAnimations()
+    {
+        byte[] bytes = {
+            1, 1, 0, 42,
+            2, 'B', 'a', 'k', 'e', 'r', 0,
+            13, 0, 10,
+            14, 0, 11,
+            114, 0, 12,
+            0
+        };
+        NpcDefinitionData npc = NpcDefinitionDecoder.decode(bytes);
+        Assert.assertEquals("Baker", npc.name);
+        Assert.assertArrayEquals(new int[]{42}, npc.modelIds);
+        Assert.assertEquals(10, npc.standingAnimation);
+        Assert.assertEquals(11, npc.walkingAnimation);
+        Assert.assertEquals(12, npc.runAnimation);
+        Assert.assertTrue(npc.isSafeForCustomRendering());
+    }
+
+    @Test
+    public void animatedNpcPlacementsAreValidAndCopyTheirAnimation()
+    {
+        PropPlacement npc = new PropPlacement();
+        npc.name = "Baker - Idle";
+        npc.objectId = -1;
+        npc.npcId = 123;
+        npc.animationId = 456;
+        npc.worldX = 3200;
+        npc.worldY = 3200;
+        Assert.assertTrue(npc.isValid());
+
+        PropPlacement copy = npc.copy();
+        Assert.assertEquals(123, copy.npcId);
+        Assert.assertEquals(456, copy.animationId);
+        Assert.assertTrue(copy.animationLoop);
     }
 
 }

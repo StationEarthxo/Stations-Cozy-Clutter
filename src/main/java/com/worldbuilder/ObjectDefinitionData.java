@@ -28,7 +28,7 @@ final class ObjectDefinitionData
         // small IDs (for example Flower #1187 uses it for model 1610). The
         // encoding is not a safety signal; the decoded ID and resulting model
         // geometry are validated separately.
-        if (animationId != -1 || transforms || modelIds == null || modelIds.length == 0 || modelIds.length > 8)
+        if (transforms || modelIds == null || modelIds.length == 0 || modelIds.length > 8)
         {
             return false;
         }
