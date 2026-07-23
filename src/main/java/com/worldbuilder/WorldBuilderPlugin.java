@@ -81,8 +81,8 @@ import org.slf4j.LoggerFactory;
 @PluginDescriptor(
     name = "Station's Cozy Clutter",
     description = "Build with client-side game scenery and share it as Tilepacks",
-    tags = {"world", "builder", "objects", "housing", "tilepack"},
-    enabledByDefault = false
+    tags = {"world", "builder", "objects", "housing", "tilepack"}
+   
 )
 public class WorldBuilderPlugin extends Plugin
 {
