@@ -1,8 +1,39 @@
 # Station's Cozy Clutter
 
-Station's Cozy Clutter is a local RuneLite plugin for placing game scenery as client-side props. Builds are cosmetic: they do not alter the game server, collision, or what players without the same Tilepack see.
+Build your own cosy corners of Gielinor with static scenery, animated objects, and animated NPC decorations.
 
-Hope you all get to express your amazing creativity and enjoy making Gielinor juuust a little prettier while you wait for your friends between raids :D
+![A garden lounge built with Station's Cozy Clutter](docs/images/cozy-clutter-garden.png)
+
+Station's Cozy Clutter is a RuneLite plugin for placing game scenery as client-side props. Search a visual catalogue, attach a decoration to your cursor, and arrange anything from a tiny market stall to a full hangout space.
+
+Builds are cosmetic: they do not alter the game server, collision, or what players without the same Tilepack see. Hope you get to express your creativity and make Gielinor juuust a little prettier while waiting for friends between raids :D
+
+## Features
+
+- Browse a searchable 3D catalogue of static objects, animated objects, and animated NPC decorations.
+- Place repeatedly from a live cursor preview and use the mouse wheel to rotate before placing.
+- Resize, raise, lower, rotate, duplicate, or delete any placed decoration.
+- Nudge props in precise 1/16-tile steps for posters, shelves, counters, and other close-fitting layouts.
+- Move an existing decoration to a new tile without losing its animation, scale, height, rotation, or nudge.
+- Undo recent changes and share complete builds as compact, portable Tilepack codes.
+- Keep old Tilepacks working: animation and nudge data are optional and backward-compatible.
+
+## More creations
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/images/cozy-clutter-workshop.png" alt="A decorated workshop with animated figures and props">
+    </td>
+    <td width="50%">
+      <img src="docs/images/cozy-clutter-bar.png" alt="A player-built bar with animated NPC decorations">
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><sub>A busy workshop full of little details</sub></td>
+    <td align="center"><sub>A custom bar with animated patrons</sub></td>
+  </tr>
+</table>
 
 ## Run locally
 

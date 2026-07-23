@@ -81,7 +81,7 @@ import org.slf4j.LoggerFactory;
 
 @PluginDescriptor(
     name = "Station's Cozy Clutter",
-    description = "Build with static and animated client-side scenery and share it as Tilepacks",
+    description = "Place, animate, resize, nudge, and move client-side scenery, then share builds as Tilepacks",
     tags = {"world", "builder", "objects", "npc", "animation", "housing", "tilepack"}
 )
 public class WorldBuilderPlugin extends Plugin
