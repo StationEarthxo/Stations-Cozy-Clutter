@@ -9,6 +9,7 @@ import java.awt.Toolkit;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.KeyboardFocusManager;
 import java.awt.RenderingHints;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
@@ -33,6 +34,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
+import javax.swing.text.JTextComponent;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.Animation;
@@ -253,6 +255,14 @@ public class WorldBuilderPlugin extends Plugin
             {
                 event.consume();
                 clientThread.invokeLater(() -> cancelPlacement("Placement cancelled."));
+                return;
+            }
+            if (event.getKeyCode() == KeyEvent.VK_Z && event.isControlDown()
+                && panel != null && panel.isShowing()
+                && !(KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner() instanceof JTextComponent))
+            {
+                event.consume();
+                clientThread.invokeLater(WorldBuilderPlugin.this::undo);
             }
         }
 
@@ -284,6 +294,7 @@ public class WorldBuilderPlugin extends Plugin
         keyManager.registerKeyListener(placementKeyListener);
         loadSafetyState();
         loadPlacements();
+        updatePanelActions();
         clientThread.invokeLater(() ->
         {
             refreshAll();
@@ -1080,10 +1091,37 @@ public class WorldBuilderPlugin extends Plugin
         savePlacements();
     }
 
+    void undoLastChange()
+    {
+        clientThread.invokeLater(this::undo);
+    }
+
+    void deleteAllPlacements()
+    {
+        clientThread.invokeLater(() ->
+        {
+            if (placements.isEmpty())
+            {
+                message("There are no placed decorations to delete.");
+                return;
+            }
+            int deleted = placements.size();
+            pushUndo();
+            placements.clear();
+            copied = null;
+            movingPlacementId = null;
+            clearPlacementPreviewAndProbe();
+            savePlacements();
+            refreshAll();
+            message("Deleted " + deleted + " decorations. Use Undo to restore them.");
+        });
+    }
+
     private void undo()
     {
         if (undo.isEmpty())
         {
+            message("There is nothing to undo.");
             return;
         }
         placements.clear();
@@ -1281,6 +1319,15 @@ public class WorldBuilderPlugin extends Plugin
         else
         {
             configManager.setConfiguration(WorldBuilderConfig.GROUP, STORAGE_KEY, gson.toJson(placements));
+        }
+        updatePanelActions();
+    }
+
+    private void updatePanelActions()
+    {
+        if (panel != null)
+        {
+            panel.setBuildActionState(!undo.isEmpty(), placements.size());
         }
     }
 

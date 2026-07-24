@@ -16,7 +16,9 @@ Builds are cosmetic: they do not alter the game server, collision, or what playe
 - Resize, raise, lower, rotate, duplicate, or delete any placed decoration.
 - Nudge props in precise 1/16-tile steps for posters, shelves, counters, and other close-fitting layouts.
 - Move an existing decoration to a new tile without losing its animation, scale, height, rotation, or nudge.
-- Undo recent changes and share complete builds as compact, portable Tilepack codes.
+- Undo recent changes from the sidebar or with Ctrl+Z while the panel is open.
+- Delete an entire build with a confirmation warning, then recover it with Undo if needed.
+- Share complete builds as compact, portable Tilepack codes.
 - Keep old Tilepacks working: animation and nudge data are optional and backward-compatible.
 
 ## More creations

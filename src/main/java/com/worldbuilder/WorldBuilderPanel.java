@@ -14,6 +14,7 @@ import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
@@ -41,7 +42,10 @@ final class WorldBuilderPanel extends PluginPanel
     private final JScrollPane resultsScroll = new JScrollPane(results);
     private final JButton previousPage = new JButton("\u25C0");
     private final JButton nextPage = new JButton("\u25B6");
+    private final JButton undoButton = new JButton("Undo");
+    private final JButton deleteAllButton = new JButton("Delete All");
     private final JLabel pageStatus = new JLabel("0 matches", SwingConstants.CENTER);
+    private int placementCount;
     private final Timer searchTimer;
     private volatile int resultGeneration;
     private List<CatalogEntry> currentResults = Collections.emptyList();
@@ -97,7 +101,21 @@ final class WorldBuilderPanel extends PluginPanel
         pager.add(previousPage, BorderLayout.WEST);
         pager.add(pageStatus, BorderLayout.CENTER);
         pager.add(nextPage, BorderLayout.EAST);
-        add(pager, BorderLayout.SOUTH);
+        JPanel actions = new JPanel(new GridLayout(1, 2, 5, 0));
+        actions.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        undoButton.setToolTipText("Undo the last build change (Ctrl+Z while this panel is open)");
+        deleteAllButton.setToolTipText("Delete every placed decoration after confirmation");
+        deleteAllButton.setForeground(new Color(255, 130, 130));
+        undoButton.addActionListener(event -> plugin.undoLastChange());
+        deleteAllButton.addActionListener(event -> confirmDeleteAll());
+        actions.add(undoButton);
+        actions.add(deleteAllButton);
+
+        JPanel footer = new JPanel(new BorderLayout(0, 5));
+        footer.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        footer.add(pager, BorderLayout.NORTH);
+        footer.add(actions, BorderLayout.SOUTH);
+        add(footer, BorderLayout.SOUTH);
 
         searchTimer = new Timer(220, event -> runSearch());
         searchTimer.setRepeats(false);
@@ -110,6 +128,36 @@ final class WorldBuilderPanel extends PluginPanel
         catalogueType.addActionListener(event -> runSearch());
         placementMode.addActionListener(event ->
             plugin.setPlacementMode((PlacementMode) placementMode.getSelectedItem()));
+    }
+
+    void setBuildActionState(boolean canUndo, int count)
+    {
+        SwingUtilities.invokeLater(() ->
+        {
+            placementCount = count;
+            undoButton.setEnabled(canUndo);
+            deleteAllButton.setEnabled(count > 0);
+            deleteAllButton.setText(count > 0 ? "Delete All (" + count + ")" : "Delete All");
+        });
+    }
+
+    private void confirmDeleteAll()
+    {
+        if (placementCount <= 0)
+        {
+            return;
+        }
+        int result = JOptionPane.showConfirmDialog(
+            SwingUtilities.getWindowAncestor(this),
+            "Delete all " + placementCount + " placed decorations?\n\n"
+                + "This can be recovered immediately with Undo.",
+            "Delete every Cozy Clutter decoration?",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.WARNING_MESSAGE);
+        if (result == JOptionPane.YES_OPTION)
+        {
+            plugin.deleteAllPlacements();
+        }
     }
 
     void setCatalogueProgress(int loaded, int total)
