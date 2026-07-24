@@ -27,6 +27,11 @@ public class WorldBuilderPluginTest
         prop.animationId = 472;
         prop.offsetX = 24;
         prop.offsetY = -16;
+        prop.instanceSpecific = true;
+        prop.instanceSceneX = 42;
+        prop.instanceSceneY = 61;
+        prop.instancePlane = 0;
+        prop.instanceTemplateChunk = 123456;
 
         Tilepack input = new Tilepack();
         input.name = "Test house";
@@ -40,6 +45,10 @@ public class WorldBuilderPluginTest
         Assert.assertEquals(472, output.props.get(0).animationId);
         Assert.assertEquals(24, output.props.get(0).offsetX);
         Assert.assertEquals(-16, output.props.get(0).offsetY);
+        Assert.assertTrue(output.props.get(0).instanceSpecific);
+        Assert.assertEquals(42, output.props.get(0).instanceSceneX);
+        Assert.assertEquals(61, output.props.get(0).instanceSceneY);
+        Assert.assertEquals(123456, output.props.get(0).instanceTemplateChunk);
     }
 
     @Test
@@ -172,6 +181,43 @@ public class WorldBuilderPluginTest
         Assert.assertEquals(16, PlacementMode.FINE_GRID.getLocalStep());
         Assert.assertTrue(PlacementMode.PRECISE_GRID.followsCursor());
         Assert.assertEquals(8, PlacementMode.PRECISE_GRID.getLocalStep());
+    }
+
+    @Test
+    public void instanceCoordinatesAreOptionalAndValidated()
+    {
+        PropPlacement oldPlacement = new PropPlacement();
+        oldPlacement.name = "Old chair";
+        oldPlacement.objectId = 100;
+        oldPlacement.worldX = 3200;
+        oldPlacement.worldY = 3200;
+        Assert.assertTrue(oldPlacement.isValid());
+        Assert.assertFalse(oldPlacement.instanceSpecific);
+
+        PropPlacement pohPlacement = oldPlacement.copy();
+        pohPlacement.instanceSpecific = true;
+        pohPlacement.instanceSceneX = 40;
+        pohPlacement.instanceSceneY = 56;
+        pohPlacement.instancePlane = 0;
+        pohPlacement.instanceTemplateChunk = 123456;
+        Assert.assertTrue(pohPlacement.isValid());
+
+        PropPlacement copied = pohPlacement.copy();
+        Assert.assertTrue(copied.instanceSpecific);
+        Assert.assertEquals(40, copied.instanceSceneX);
+        Assert.assertEquals(56, copied.instanceSceneY);
+        Assert.assertEquals(123456, copied.instanceTemplateChunk);
+
+        pohPlacement.instanceSceneX = 104;
+        Assert.assertFalse(pohPlacement.isValid());
+
+        PropPlacement decodedOldPlacement = new Gson().fromJson(
+            "{\"name\":\"Old chair\",\"objectId\":100,\"modelId\":-1,"
+                + "\"npcId\":-1,\"animationId\":-1,\"worldX\":3200,\"worldY\":3200,\"scale\":128}",
+            PropPlacement.class);
+        Assert.assertTrue(decodedOldPlacement.isValid());
+        Assert.assertFalse(decodedOldPlacement.instanceSpecific);
+        Assert.assertEquals(-1, decodedOldPlacement.instanceSceneX);
     }
 
 }

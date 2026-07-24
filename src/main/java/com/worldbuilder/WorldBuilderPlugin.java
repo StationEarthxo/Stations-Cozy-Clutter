@@ -144,6 +144,7 @@ public class WorldBuilderPlugin extends Plugin
     private volatile WorldPoint placementPreviewPoint;
     private volatile LocalPoint placementPreviewLocalPoint;
     private volatile LocalPoint placementPreviewTileLocalPoint;
+    private volatile InstanceAnchor placementPreviewInstanceAnchor;
     private volatile int placementPreviewOffsetX;
     private volatile int placementPreviewOffsetY;
     private boolean placementMousePressConsumed;
@@ -192,10 +193,11 @@ public class WorldBuilderPlugin extends Plugin
                 WorldPoint point = placementPreviewPoint;
                 int offsetX = placementPreviewOffsetX;
                 int offsetY = placementPreviewOffsetY;
+                InstanceAnchor instanceAnchor = placementPreviewInstanceAnchor;
                 event.consume();
                 placementMousePressConsumed = true;
                 placementMouseClickConsumed = true;
-                clientThread.invokeLater(() -> placeCopied(point, offsetX, offsetY));
+                clientThread.invokeLater(() -> placeCopied(point, offsetX, offsetY, instanceAnchor));
             }
             return event;
         }
@@ -485,6 +487,7 @@ public class WorldBuilderPlugin extends Plugin
         placementPreviewPoint = point;
         placementPreviewLocalPoint = target.renderPoint;
         placementPreviewTileLocalPoint = localPoint;
+        placementPreviewInstanceAnchor = captureInstanceAnchor(worldView, localPoint);
         placementPreviewOffsetX = target.offsetX;
         placementPreviewOffsetY = target.offsetY;
     }
@@ -560,6 +563,7 @@ public class WorldBuilderPlugin extends Plugin
         placementPreviewPoint = null;
         placementPreviewLocalPoint = null;
         placementPreviewTileLocalPoint = null;
+        placementPreviewInstanceAnchor = null;
         placementPreviewOffsetX = 0;
         placementPreviewOffsetY = 0;
     }
@@ -878,8 +882,10 @@ public class WorldBuilderPlugin extends Plugin
         {
             return;
         }
-        WorldPoint point = WorldPoint.fromLocalInstance(client, worldView.getSelectedSceneTile().getLocalLocation());
-        PropPlacement selected = findLastAt(point);
+        LocalPoint selectedLocalPoint = worldView.getSelectedSceneTile().getLocalLocation();
+        WorldPoint point = WorldPoint.fromLocalInstance(client, selectedLocalPoint);
+        InstanceAnchor instanceAnchor = captureInstanceAnchor(worldView, selectedLocalPoint);
+        PropPlacement selected = findLastAt(point, instanceAnchor);
 
         MenuEntry parent = client.createMenuEntry(-1)
             .setOption("Station's Cozy Clutter")
@@ -892,7 +898,7 @@ public class WorldBuilderPlugin extends Plugin
             menu.createMenuEntry(-1)
                 .setOption("Place " + copied.name)
                 .setType(MenuAction.RUNELITE)
-                .onClick(entry -> placeCopied(point, copied.offsetX, copied.offsetY));
+                .onClick(entry -> placeCopied(point, copied.offsetX, copied.offsetY, instanceAnchor));
         }
 
         if (selected != null)
@@ -919,6 +925,11 @@ public class WorldBuilderPlugin extends Plugin
                 .onClick(entry -> mutate(selected, p -> p.offsetY = Math.max(-MAX_NUDGE, p.offsetY - NUDGE_STEP)));
             menu.createMenuEntry(-1).setOption("Nudge placed object west").setType(MenuAction.RUNELITE)
                 .onClick(entry -> mutate(selected, p -> p.offsetX = Math.max(-MAX_NUDGE, p.offsetX - NUDGE_STEP)));
+            if (instanceAnchor != null && !selected.instanceSpecific)
+            {
+                menu.createMenuEntry(-1).setOption("Keep only this POH copy").setType(MenuAction.RUNELITE)
+                    .onClick(entry -> mutate(selected, p -> applyInstanceAnchor(p, instanceAnchor)));
+            }
             menu.createMenuEntry(-1).setOption("Move placed object").setType(MenuAction.RUNELITE)
                 .onClick(entry -> move(selected));
             menu.createMenuEntry(-1).setOption("Duplicate placed object").setType(MenuAction.RUNELITE)
@@ -971,7 +982,7 @@ public class WorldBuilderPlugin extends Plugin
             "Copied " + template.name + ". Scroll to rotate, left-click to place; right-click or Escape cancels.");
     }
 
-    private void placeCopied(WorldPoint point, int offsetX, int offsetY)
+    private void placeCopied(WorldPoint point, int offsetX, int offsetY, InstanceAnchor instanceAnchor)
     {
         PropPlacement template = copied;
         if (template == null)
@@ -993,6 +1004,7 @@ public class WorldBuilderPlugin extends Plugin
             selected.worldX = point.getX();
             selected.worldY = point.getY();
             selected.plane = point.getPlane();
+            applyInstanceAnchor(selected, instanceAnchor);
             selected.offsetX = offsetX;
             selected.offsetY = offsetY;
             selected.rotation = template.rotation;
@@ -1016,6 +1028,7 @@ public class WorldBuilderPlugin extends Plugin
         }
         pushUndo();
         PropPlacement placement = template.duplicateAt(point.getX(), point.getY(), point.getPlane());
+        applyInstanceAnchor(placement, instanceAnchor);
         placement.offsetX = offsetX;
         placement.offsetY = offsetY;
         placements.add(placement);
@@ -1389,21 +1402,15 @@ public class WorldBuilderPlugin extends Plugin
         {
             return false;
         }
-        WorldPoint source = new WorldPoint(placement.worldX, placement.worldY, placement.plane);
-        Collection<WorldPoint> localWorldPoints = WorldPoint.toLocalInstance(worldView, source);
-        if (localWorldPoints.isEmpty())
+        Collection<LocalPoint> localPoints = resolveLocalPoints(worldView, placement);
+        if (localPoints.isEmpty())
         {
             return false;
         }
 
         List<RuneLiteObject> objects = new ArrayList<>();
-        for (WorldPoint localWorld : localWorldPoints)
+        for (LocalPoint local : localPoints)
         {
-            LocalPoint local = LocalPoint.fromWorld(worldView, localWorld);
-            if (local == null)
-            {
-                continue;
-            }
             LocalPoint renderPoint = local.plus(placement.offsetX, placement.offsetY);
             if (!renderPoint.isInScene())
             {
@@ -1529,17 +1536,96 @@ public class WorldBuilderPlugin extends Plugin
         modelFactory.capture(object.getId(), objectConfig & 31, (objectConfig >>> 6) & 3, model);
     }
 
-    private PropPlacement findLastAt(WorldPoint point)
+    private PropPlacement findLastAt(WorldPoint point, InstanceAnchor instanceAnchor)
     {
         for (int i = placements.size() - 1; i >= 0; i--)
         {
             PropPlacement p = placements.get(i);
+            if (p.instanceSpecific)
+            {
+                if (instanceAnchor != null
+                    && p.instanceSceneX == instanceAnchor.sceneX
+                    && p.instanceSceneY == instanceAnchor.sceneY
+                    && p.instancePlane == instanceAnchor.plane
+                    && p.instanceTemplateChunk == instanceAnchor.templateChunk)
+                {
+                    return p;
+                }
+                continue;
+            }
             if (p.worldX == point.getX() && p.worldY == point.getY() && p.plane == point.getPlane())
             {
                 return p;
             }
         }
         return null;
+    }
+
+    private static InstanceAnchor captureInstanceAnchor(WorldView worldView, LocalPoint localPoint)
+    {
+        if (worldView == null || localPoint == null || !worldView.isInstance())
+        {
+            return null;
+        }
+        int sceneX = localPoint.getSceneX();
+        int sceneY = localPoint.getSceneY();
+        int plane = worldView.getPlane();
+        int[][][] chunks = worldView.getInstanceTemplateChunks();
+        int chunkX = sceneX / 8;
+        int chunkY = sceneY / 8;
+        if (plane < 0 || plane >= chunks.length
+            || chunkX < 0 || chunkX >= chunks[plane].length
+            || chunkY < 0 || chunkY >= chunks[plane][chunkX].length)
+        {
+            return null;
+        }
+        int templateChunk = chunks[plane][chunkX][chunkY];
+        return templateChunk < 0 ? null : new InstanceAnchor(sceneX, sceneY, plane, templateChunk);
+    }
+
+    private static void applyInstanceAnchor(PropPlacement placement, InstanceAnchor anchor)
+    {
+        placement.instanceSpecific = anchor != null;
+        placement.instanceSceneX = anchor == null ? -1 : anchor.sceneX;
+        placement.instanceSceneY = anchor == null ? -1 : anchor.sceneY;
+        placement.instancePlane = anchor == null ? -1 : anchor.plane;
+        placement.instanceTemplateChunk = anchor == null ? -1 : anchor.templateChunk;
+    }
+
+    private static Collection<LocalPoint> resolveLocalPoints(WorldView worldView, PropPlacement placement)
+    {
+        if (placement.instanceSpecific)
+        {
+            if (!worldView.isInstance() || placement.instancePlane != worldView.getPlane())
+            {
+                return Collections.emptyList();
+            }
+            int[][][] chunks = worldView.getInstanceTemplateChunks();
+            int chunkX = placement.instanceSceneX / 8;
+            int chunkY = placement.instanceSceneY / 8;
+            if (placement.instancePlane < 0 || placement.instancePlane >= chunks.length
+                || chunkX < 0 || chunkX >= chunks[placement.instancePlane].length
+                || chunkY < 0 || chunkY >= chunks[placement.instancePlane][chunkX].length
+                || chunks[placement.instancePlane][chunkX][chunkY] != placement.instanceTemplateChunk)
+            {
+                return Collections.emptyList();
+            }
+            return Collections.singleton(
+                LocalPoint.fromScene(placement.instanceSceneX, placement.instanceSceneY, worldView));
+        }
+
+        WorldPoint source = new WorldPoint(placement.worldX, placement.worldY, placement.plane);
+        Collection<WorldPoint> localWorldPoints = WorldPoint.toLocalInstance(worldView, source);
+        List<LocalPoint> localPoints = new ArrayList<>();
+        for (WorldPoint localWorld : localWorldPoints)
+        {
+            LocalPoint local = LocalPoint.fromWorld(worldView, localWorld);
+            if (local != null)
+            {
+                localPoints.add(local);
+            }
+        }
+        return localPoints;
     }
 
     private PropPlacement findById(String id)
@@ -1743,6 +1829,22 @@ public class WorldBuilderPlugin extends Plugin
             this.renderPoint = renderPoint;
             this.offsetX = offsetX;
             this.offsetY = offsetY;
+        }
+    }
+
+    private static final class InstanceAnchor
+    {
+        private final int sceneX;
+        private final int sceneY;
+        private final int plane;
+        private final int templateChunk;
+
+        private InstanceAnchor(int sceneX, int sceneY, int plane, int templateChunk)
+        {
+            this.sceneX = sceneX;
+            this.sceneY = sceneY;
+            this.plane = plane;
+            this.templateChunk = templateChunk;
         }
     }
 

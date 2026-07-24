@@ -20,6 +20,7 @@ Builds are cosmetic: they do not alter the game server, collision, or what playe
 - Delete an entire build with a confirmation warning, then recover it with Undo if needed.
 - Share complete builds as compact, portable Tilepack codes.
 - Keep old Tilepacks working: animation and nudge data are optional and backward-compatible.
+- Place decorations in one specific POH/instance room without cloning them into repeated room chunks.
 
 ## More creations
 
@@ -66,6 +67,8 @@ Shift-right-click a tile containing a placed prop to rotate, raise, lower, resiz
 ## Tilepacks
 
 From the ground-tile **Station's Cozy Clutter** menu, use **Export Tilepack** to copy a `WB1:` code. Use **Import Tilepack** after copying someone else's code. Imported objects retain their saved world coordinates and precise nudge offsets. Older Tilepacks without nudge data remain centred on their original tiles.
+
+New decorations placed in a POH remember the exact room they belong to. Older POH decorations may still appear in repeated rooms because their original saves contain no room identity; right-click the copy you want and choose **Keep only this POH copy** to migrate it safely.
 
 Tilepacks contain only cosmetic client-side placements. Sharing a Tilepack does not change the game server or make the objects visible to players who have not imported it.
 
