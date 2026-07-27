@@ -9,7 +9,6 @@ import java.awt.Toolkit;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
-import java.awt.KeyboardFocusManager;
 import java.awt.RenderingHints;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
@@ -34,7 +33,6 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
-import javax.swing.text.JTextComponent;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.Animation;
@@ -261,7 +259,7 @@ public class WorldBuilderPlugin extends Plugin
             }
             if (event.getKeyCode() == KeyEvent.VK_Z && event.isControlDown()
                 && panel != null && panel.isShowing()
-                && !(KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner() instanceof JTextComponent))
+                && event.getComponent() == client.getCanvas())
             {
                 event.consume();
                 clientThread.invokeLater(WorldBuilderPlugin.this::undo);
