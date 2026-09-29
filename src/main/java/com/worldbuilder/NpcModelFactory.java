@@ -43,12 +43,7 @@ final class NpcModelFactory
         {
             return ModelSafetyValidator.isSafe(base) ? base : null;
         }
-        Model copy = client.mergeModels(base);
-        if (copy != null)
-        {
-            copy.scale(placement.scale, placement.scale, placement.scale);
-        }
-        return ModelSafetyValidator.isSafe(copy) ? copy : null;
+        return createModel(placement.npcId, placement.scale);
     }
 
     Model createPreview(int npcId)
@@ -58,6 +53,16 @@ final class NpcModelFactory
         {
             return cached;
         }
+        Model model = createModel(npcId, 128);
+        if (model != null)
+        {
+            cache.put(npcId, model);
+        }
+        return model;
+    }
+
+    private Model createModel(int npcId, int placementScale)
+    {
         try
         {
             byte[] bytes = client.getIndexConfig().loadData(NPC_CONFIG_ARCHIVE, npcId);
@@ -106,10 +111,13 @@ final class NpcModelFactory
             {
                 data.scale(definition.widthScale, definition.heightScale, definition.widthScale);
             }
+            if (placementScale != 128)
+            {
+                data.scale(placementScale, placementScale, placementScale);
+            }
             Model model = data.light(64 + definition.ambient, 850 + definition.contrast, -30, -50, -30);
             if (ModelSafetyValidator.isSafe(model))
             {
-                cache.put(npcId, model);
                 return model;
             }
         }

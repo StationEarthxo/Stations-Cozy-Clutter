@@ -71,13 +71,7 @@ final class ObjectModelFactory
         {
             return ModelSafetyValidator.isSafe(base) ? base : reject(key);
         }
-
-        Model copy = client.mergeModels(base);
-        if (copy != null)
-        {
-            copy.scale(placement.scale, placement.scale, placement.scale);
-        }
-        return ModelSafetyValidator.isSafe(copy) ? copy : reject(key);
+        return createObjectModel(key, placement.scale, false);
     }
 
     Model createPreview(int objectId, int type)
@@ -112,6 +106,11 @@ final class ObjectModelFactory
     }
 
     private Model createObjectModel(SourceKey key)
+    {
+        return createObjectModel(key, 128, true);
+    }
+
+    private Model createObjectModel(SourceKey key, int placementScale, boolean cacheResult)
     {
         try
         {
@@ -212,10 +211,17 @@ final class ObjectModelFactory
             {
                 data.translate(definition.offsetX, definition.offsetHeight, definition.offsetY);
             }
+            if (placementScale != 128)
+            {
+                data.scale(placementScale, placementScale, placementScale);
+            }
             Model model = data.light(64 + definition.ambient, 768 + definition.contrast, -50, -10, -50);
             if (model != null && ModelSafetyValidator.isSafe(model))
             {
-                generatedModels.put(key, model);
+                if (cacheResult)
+                {
+                    generatedModels.put(key, model);
+                }
                 return model;
             }
             return reject(key);
